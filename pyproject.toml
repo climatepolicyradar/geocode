@@ -16,8 +16,52 @@ numpy = "1.26.4"
 transformers = "4.33.2"
 pyarrow = "^20.0.0"
 fastparquet = "^2024.11.0"
+pre-commit = "^4.2.0"
 
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+
+[tool.ruff]
+lint.select = ["E", "F", "D", "I"]
+line-length = 88
+# Docstring Ignores:
+# D100 - Missing docstring in public module
+# D103 - Missing docstring in public function
+# D104 - Missing docstring in public package
+# D107 - Missing docstring in __init__
+# D202 - No blank lines allowed after function docstring
+# D203 - 1 blank line required before class docstring
+# D213 - Multi-line docstring summary should start at the first line
+# D400 - First line should end with a period
+# D401 - First line should be in imperative mood
+# D406 - Section name should end with a newline
+# D407 - Missing dashed underline after section
+# D413 - Missing blank line after last section
+# D415 - First line should end with a period, question mark, or exclamation point
+lint.ignore = [
+  "D100",
+  "D103",
+  "D104",
+  "D107",
+  "D202",
+  "D203",
+  "D212",
+  "D400",
+  "D401",
+  "D406",
+  "D407",
+  "D413",
+  "D415",
+  "E501",
+]
+
+# Ignore `E402` (import violations) in all `__init__.py` files, and `E501` (line too long) in all files in the `tests` directory
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/*" = ["E501"]
+
+[tool.pyright]
+reportMissingImports = false
