@@ -1,4 +1,4 @@
-# Running geocoding on Climate Policy Radar data
+# Entity linking & geocoding
 
 This code uses [Refined](https://github.com/amazon-science/ReFinED) to perform fine-grained entity detection and linking to Wikipedia on the Climate Policy Radar dataset.
 
