@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Optional
 
 import pandas as pd
 import typer
@@ -10,11 +10,27 @@ from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn
 
 from models import LabelledPassage, Span
 
+# Use this flag to limit the processing time for quick iteration
+DEBUG = os.environ.get("DEBUG", "false").lower() == "true"
+if DEBUG:
+    rprint(
+        "[bold yellow]Running in debug mode. Turn off when ready to run on the full dataset."
+    )
+
 
 def find_entities_refined(
-    dataset_dir: str,
+    dataset_dir: Annotated[
+        str,
+        typer.Argument(
+            help="Path to the directory containing parquet files, cloned from https://huggingface.co/datasets/ClimatePolicyRadar/all-document-text-data."
+        ),
+    ],
     skip_already_processed: bool = True,
     num_documents: Optional[int] = None,
+    doc_geography_iso: Annotated[
+        Optional[str],
+        typer.Option(help="ISO 3166-1 alpha-3 code to filter documents by."),
+    ] = None,
     output_dir: Path = Path("./data/output"),
 ):
     """Generates a JSON file for each document in the dataset containing the spans found by refined."""
@@ -47,13 +63,33 @@ def find_entities_refined(
                 "text_block.text_block_id",
                 "text_block.type",
                 "document_metadata.languages",
+                "document_metadata.geographies",
             ],
         )
         df_list.append(df)
 
     documents = pd.concat(df_list, ignore_index=True)
+    del df_list
+
+    if doc_geography_iso:
+        rprint(
+            f"[bold blue]Filtering to documents with geography {doc_geography_iso}..."
+        )
+        documents = documents[
+            documents["document_metadata.geographies"].apply(
+                lambda x: x is not None and doc_geography_iso.upper() in x
+            )
+        ]
+        rprint(
+            f"[bold green]Filtered to {len(documents['document_id'].unique())} documents"
+        )
 
     rprint("[bold blue]Processing and filtering dataset...")
+    # Documents with no text have one row in the dataset, with a null value for text blocks
+    documents = documents[
+        documents["text_block.text"].notna() & documents["text_block.text"].str.strip()
+        != ""
+    ]
     documents = documents[
         ~documents["text_block.type"].isin(["pageNumber", "pageHeader", "pageFooter"])
     ]
@@ -107,8 +143,8 @@ def find_entities_refined(
                 visible=len(text_blocks) > 1,
             )
 
-            debug__text_block_limit = None
-            debug__text_block_limit = 500
+            debug__text_block_limit = 500 if DEBUG else None
+
             for i, text in enumerate(text_blocks):
                 if debug__text_block_limit is not None and i > debug__text_block_limit:
                     break
@@ -121,34 +157,50 @@ def find_entities_refined(
                     )
 
                 if text not in passages:
-                    passages[text] = LabelledPassage(
-                        id=f"{document_id}_{hash(text)}",
-                        text=text,
-                        spans=[],
-                        metadata={"document_id": document_id},
-                    )
+                    try:
+                        passages[text] = LabelledPassage(
+                            id=f"{document_id}_{hash(text)}",
+                            text=text,
+                            spans=[],
+                            metadata={"document_id": document_id},
+                        )
+                    except Exception as e:
+                        rprint(
+                            f"[red]Error processing text {text} for {document_id}. Skipping."
+                        )
+                        rprint(f"[red]Error: {e}")
+                        continue
 
                 for span in refined.process_text(text):
                     if span.predicted_entity is not None:
                         if span.predicted_entity.wikidata_entity_id:
                             all_qids.append(span.predicted_entity.wikidata_entity_id)
 
-                        passages[text].spans.append(
-                            Span(
-                                text=span.text,
-                                start_index=span.start,
-                                end_index=span.start + span.ln,
-                                type=span.coarse_mention_type or "unknown",
-                                fine_grained_type=span.predicted_entity_types[0][1]
-                                if span.predicted_entity_types
-                                else None,
-                                id=span.predicted_entity.wikidata_entity_id
-                                or "unknown",
-                                probability=span.entity_linking_model_confidence_score,
-                                wikipedia_title=span.predicted_entity.wikipedia_entity_title,
-                                wikidata_id=span.predicted_entity.wikidata_entity_id,
+                        # TODO: this *probably* isn't needed, but is more just a failsafe
+                        # because the code hasn't been run on the entire dataset yet.
+                        try:
+                            passages[text].spans.append(
+                                Span(
+                                    text=span.text,
+                                    start_index=span.start,
+                                    end_index=span.start + span.ln,
+                                    type=span.coarse_mention_type or "unknown",
+                                    fine_grained_type=span.predicted_entity_types[0][1]
+                                    if span.predicted_entity_types
+                                    else None,
+                                    id=span.predicted_entity.wikidata_entity_id
+                                    or "unknown",
+                                    probability=span.entity_linking_model_confidence_score,
+                                    wikipedia_title=span.predicted_entity.wikipedia_entity_title,
+                                    wikidata_id=span.predicted_entity.wikidata_entity_id,
+                                )
                             )
-                        )
+                        except Exception as e:
+                            rprint(
+                                f"[red]Error processing span {span} for {document_id}. Skipping."
+                            )
+                            rprint(f"[red]Error: {e}")
+                            continue
 
             progress.remove_task(text_block_task)
             progress.update(task, advance=1)
@@ -157,7 +209,9 @@ def find_entities_refined(
             with open(output_path, "w") as f:
                 for passage in passages.values():
                     f.write(passage.model_dump_json() + "\n")
-            rprint(f"[bold green]Wrote {len(passages)} passages to {output_path}")
+            rprint(
+                f"[bold green]Wrote {len(passages)} labelled passages to {output_path}"
+            )
 
 
 if __name__ == "__main__":

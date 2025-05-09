@@ -1,14 +1,19 @@
-# Running geocoding on Climate Policy Radar data.
+# Running geocoding on Climate Policy Radar data
 
-This script uses [Refined](https://github.com/amazon-science/ReFinED) to perform fine-grained entity detection and linking to Wikipedia on the Climate Policy Radar dataset. It also demonstrates some sensible ways to work with CPR data.
+This code uses [Refined](https://github.com/amazon-science/ReFinED) to perform fine-grained entity detection and linking to Wikipedia on the Climate Policy Radar dataset.
 
-I chose Wikipedia as it gives you the option to use Wikidata to geocode non-human-settlement entities (such as forests, lakes, rivers etc) which are not included in normal geocoding solutions. I thought this might be especially useful for Brazil!
+Using Wikipedia as gives you the option to use Wikidata to geocode non-human-settlement entities (such as forests, lakes, rivers etc). But, if you just want to geocode cities and regions, jump straight to [Using spaCy + geopy to extract only human settlements](#using-spacy--geopy-to-extract-only-human-settlements-eg-cities-regions)
 
-But, if you just want to geocode cities and regions, jump straight to [Using spaCy + geopy to extract only human settlements](#using-spacy--geopy-to-extract-only-human-settlements-eg-cities-regions)
+## Prerequisites
+
+This repo uses `poetry` for dependency management. Run:
+
+- `poetry install`
+- `poetry run python find_entities_refined.py --help`
+
+This project uses our open data. Run `git clone https://huggingface.co/datasets/ClimatePolicyRadar/all-document-text-data` and use the local directory it's cloned to to interact with this code.
 
 ## Running the parser
-
-The code is in `find_entities_refined.py` and dependencies are managed using `poetry`. Run `poetry install && poetry run python find_entities_refined.py --help` to get started.
 
 RefinED is quite an old library (but the open source community has not been blessed with a better alternative since, as far as we know). This means:
 
